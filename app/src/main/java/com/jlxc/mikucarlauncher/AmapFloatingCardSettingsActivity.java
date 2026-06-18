@@ -26,7 +26,7 @@ public class AmapFloatingCardSettingsActivity extends Activity {
     private static final float DESIGN_H = 720f;
     private static final float CARD1_L = 210f;
     private static final float CARD1_T = 35.5f;
-    private static final float CARD1_R = 730f;
+    private static final float CARD1_R = 1140f;
     private static final float CARD1_B = 528.5f;
     private static final float CARD1_WIDGET_INSET = 12f;
 
@@ -54,6 +54,14 @@ public class AmapFloatingCardSettingsActivity extends Activity {
         super.onResume();
         keepFullscreen();
         refreshSummary();
+        // 设置页属于非首页，进入后确保自动悬浮窗关闭。
+        AmapFloatingCardController.sendCloseMapBroadcast(this);
+    }
+
+    @Override
+    protected void onPause() {
+        AmapFloatingCardController.sendCloseMapBroadcast(this);
+        super.onPause();
     }
 
     private void buildUi() {
@@ -80,7 +88,9 @@ public class AmapFloatingCardSettingsActivity extends Activity {
 
         TextView desc = new TextView(this);
         desc.setText("用于微调 com.autonavi.plus.showmap 广播里的 x / y / w / h / dpi。"
-                + "\n强制宽高为 0 时自动按 1号卡片区域计算；DPI 为 0 时不强制高德显示 DPI。");
+                + "\n强制宽高为 0 时自动按 1号卡片区域计算；DPI 为 0 时不强制高德显示 DPI。"
+                + "\n当前默认按测试机完美值换算：x=225 y=50 w=1125 h=515 dpi=200。"
+                + "\n注意：自动悬浮只会在 Launcher 首页显示；进入本页或其它页面会自动关闭。");
         desc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         desc.setTextColor(Color.rgb(64, 64, 64));
         desc.setGravity(Gravity.CENTER_VERTICAL);
@@ -101,11 +111,20 @@ public class AmapFloatingCardSettingsActivity extends Activity {
         forceHeightEdit = addEdit(root, "强制高度 px，0 表示自动", false);
         dpiEdit = addEdit(root, "高德显示 DPI，0 表示不强制", false);
 
-        Button saveAndTest = addButton(root, "保存并测试显示悬浮地图");
+        Button saveAndTest = addButton(root, "保存并回首页测试显示悬浮地图");
         saveAndTest.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 saveSettings();
+                testShowFloatingMap();
+            }
+        });
+
+        Button applyRecommended = addButton(root, "应用推荐参数并回首页测试（225,50,1125,515,DPI200）");
+        applyRecommended.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                applyRecommendedSettings();
                 testShowFloatingMap();
             }
         });
@@ -129,7 +148,7 @@ public class AmapFloatingCardSettingsActivity extends Activity {
 
         TextView adb = new TextView(this);
         adb.setText("ADB 调试："
-                + "\nadb shell am broadcast -a com.autonavi.plus.showmap --ei x 100 --ei y 80 --ei w 900 --ei h 500 --ei dpi 240"
+                + "\nadb shell am broadcast -a com.autonavi.plus.showmap --ei x 225 --ei y 50 --ei w 1125 --ei h 515 --ei dpi 200"
                 + "\nadb shell am broadcast -a com.autonavi.plus.closemap");
         adb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         adb.setTextColor(Color.rgb(38, 38, 38));
@@ -281,11 +300,14 @@ public class AmapFloatingCardSettingsActivity extends Activity {
     }
 
     private void testShowFloatingMap() {
-        Rect rect = makeCurrentCard1Rect();
-        AmapFloatingCardController.sendShowMapBroadcast(this, rect);
-        Toast.makeText(this,
-                "已发送 showmap：x=" + rect.left + " y=" + rect.top + " w=" + rect.width() + " h=" + rect.height(),
-                Toast.LENGTH_LONG).show();
+        // 自动悬浮只允许在 Launcher 首页显示。
+        // 因此设置页不再直接发送 showmap，而是保存后回到首页，由 MainActivity 的首页闸门自动拉起。
+        AmapFloatingCardController.sendCloseMapBroadcast(this);
+        Toast.makeText(this, "已保存，返回首页后自动显示悬浮地图", Toast.LENGTH_SHORT).show();
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 
     private Rect makeCurrentCard1Rect() {
@@ -307,6 +329,18 @@ public class AmapFloatingCardSettingsActivity extends Activity {
         int height = Math.round((CARD1_B - CARD1_T - CARD1_WIDGET_INSET * 2f) * sy);
 
         return AmapFloatingCardController.adjustedRectFromRaw(this, left, top, width, height);
+    }
+
+    private void applyRecommendedSettings() {
+        insetDpEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_INSET_DP));
+        xOffsetEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_X_OFFSET_PX));
+        yOffsetEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_Y_OFFSET_PX));
+        widthScaleEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_WIDTH_SCALE_PERCENT));
+        heightScaleEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_HEIGHT_SCALE_PERCENT));
+        forceWidthEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_FORCE_WIDTH_PX));
+        forceHeightEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_FORCE_HEIGHT_PX));
+        dpiEdit.setText(String.valueOf(AmapFloatingCardController.DEFAULT_DPI));
+        saveSettings();
     }
 
     private void resetSettings() {

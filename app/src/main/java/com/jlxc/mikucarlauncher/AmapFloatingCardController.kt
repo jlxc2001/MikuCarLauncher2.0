@@ -40,14 +40,19 @@ class AmapFloatingCardController(
         const val PREF_AMAP_CARD_FORCE_HEIGHT_PX = "amap_card_force_height_px"
         const val PREF_AMAP_CARD_DPI = "amap_card_dpi"
 
-        const val DEFAULT_INSET_DP = 6
-        const val DEFAULT_X_OFFSET_PX = 0
-        const val DEFAULT_Y_OFFSET_PX = 0
+        private const val PREF_AMAP_CARD_PRESET_VERSION = "amap_card_preset_version"
+        private const val CURRENT_PRESET_VERSION = 2
+        private const val OLD_DEFAULT_X_OFFSET_PX = 43
+        private const val OLD_DEFAULT_FORCE_WIDTH_PX = 750
+
+        const val DEFAULT_INSET_DP = 0
+        const val DEFAULT_X_OFFSET_PX = 3
+        const val DEFAULT_Y_OFFSET_PX = 2
         const val DEFAULT_WIDTH_SCALE_PERCENT = 100
         const val DEFAULT_HEIGHT_SCALE_PERCENT = 100
-        const val DEFAULT_FORCE_WIDTH_PX = 0
-        const val DEFAULT_FORCE_HEIGHT_PX = 0
-        const val DEFAULT_DPI = 0
+        const val DEFAULT_FORCE_WIDTH_PX = 1125
+        const val DEFAULT_FORCE_HEIGHT_PX = 515
+        const val DEFAULT_DPI = 200
 
         private const val MIN_SCALE_PERCENT = 10
         private const val MAX_SCALE_PERCENT = 300
@@ -107,6 +112,7 @@ class AmapFloatingCardController(
 
         @JvmStatic
         fun readSettings(context: Context): FloatingCardSettings {
+            migrateRecommendedDefaultsIfNeeded(context)
             val sp = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
             return FloatingCardSettings(
                 insetDp = sp.getInt(PREF_AMAP_CARD_INSET_DP, DEFAULT_INSET_DP).coerceAtLeast(0),
@@ -120,6 +126,41 @@ class AmapFloatingCardController(
                 forceHeightPx = sp.getInt(PREF_AMAP_CARD_FORCE_HEIGHT_PX, DEFAULT_FORCE_HEIGHT_PX).coerceAtLeast(0),
                 dpi = sp.getInt(PREF_AMAP_CARD_DPI, DEFAULT_DPI).coerceAtLeast(0)
             )
+        }
+
+        private fun migrateRecommendedDefaultsIfNeeded(context: Context) {
+            val sp = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
+            if (sp.getInt(PREF_AMAP_CARD_PRESET_VERSION, 0) >= CURRENT_PRESET_VERSION) {
+                return
+            }
+
+            val hasSavedAmapSettings = sp.contains(PREF_AMAP_CARD_X_OFFSET_PX)
+                    || sp.contains(PREF_AMAP_CARD_FORCE_WIDTH_PX)
+                    || sp.contains(PREF_AMAP_CARD_FORCE_HEIGHT_PX)
+                    || sp.contains(PREF_AMAP_CARD_DPI)
+
+            val looksLikeOldRecommended = hasSavedAmapSettings
+                    && sp.getInt(PREF_AMAP_CARD_INSET_DP, DEFAULT_INSET_DP) == DEFAULT_INSET_DP
+                    && sp.getInt(PREF_AMAP_CARD_X_OFFSET_PX, OLD_DEFAULT_X_OFFSET_PX) == OLD_DEFAULT_X_OFFSET_PX
+                    && sp.getInt(PREF_AMAP_CARD_Y_OFFSET_PX, DEFAULT_Y_OFFSET_PX) == DEFAULT_Y_OFFSET_PX
+                    && sp.getInt(PREF_AMAP_CARD_WIDTH_SCALE_PERCENT, DEFAULT_WIDTH_SCALE_PERCENT) == DEFAULT_WIDTH_SCALE_PERCENT
+                    && sp.getInt(PREF_AMAP_CARD_HEIGHT_SCALE_PERCENT, DEFAULT_HEIGHT_SCALE_PERCENT) == DEFAULT_HEIGHT_SCALE_PERCENT
+                    && sp.getInt(PREF_AMAP_CARD_FORCE_WIDTH_PX, OLD_DEFAULT_FORCE_WIDTH_PX) == OLD_DEFAULT_FORCE_WIDTH_PX
+                    && sp.getInt(PREF_AMAP_CARD_FORCE_HEIGHT_PX, DEFAULT_FORCE_HEIGHT_PX) == DEFAULT_FORCE_HEIGHT_PX
+                    && sp.getInt(PREF_AMAP_CARD_DPI, DEFAULT_DPI) == DEFAULT_DPI
+
+            val editor = sp.edit().putInt(PREF_AMAP_CARD_PRESET_VERSION, CURRENT_PRESET_VERSION)
+            if (looksLikeOldRecommended) {
+                editor.putInt(PREF_AMAP_CARD_INSET_DP, DEFAULT_INSET_DP)
+                    .putInt(PREF_AMAP_CARD_X_OFFSET_PX, DEFAULT_X_OFFSET_PX)
+                    .putInt(PREF_AMAP_CARD_Y_OFFSET_PX, DEFAULT_Y_OFFSET_PX)
+                    .putInt(PREF_AMAP_CARD_WIDTH_SCALE_PERCENT, DEFAULT_WIDTH_SCALE_PERCENT)
+                    .putInt(PREF_AMAP_CARD_HEIGHT_SCALE_PERCENT, DEFAULT_HEIGHT_SCALE_PERCENT)
+                    .putInt(PREF_AMAP_CARD_FORCE_WIDTH_PX, DEFAULT_FORCE_WIDTH_PX)
+                    .putInt(PREF_AMAP_CARD_FORCE_HEIGHT_PX, DEFAULT_FORCE_HEIGHT_PX)
+                    .putInt(PREF_AMAP_CARD_DPI, DEFAULT_DPI)
+            }
+            editor.apply()
         }
 
         @JvmStatic
@@ -198,13 +239,16 @@ class AmapFloatingCardController(
     private var lastRect: Rect? = null
     private var lastDpi: Int = -1
     private var isShown = false
+    private var allowShowOnHome = false
 
-    fun onResume() {
-        postUpdateMapWindow()
-    }
-
-    fun onWindowFocusChanged(hasFocus: Boolean) {
-        if (hasFocus) {
+    /**
+     * 统一由 MainActivity 告诉 controller 当前是否允许显示。
+     * 只有 MainActivity 处于前台、有窗口焦点、并且当前页面是首页时才允许 true。
+     * 这样可以避免设置页 / 应用抽屉 / 我的页面 / 切后台后又被 onResume 或焦点恢复误拉起。
+     */
+    fun setHomeVisible(visible: Boolean) {
+        allowShowOnHome = visible
+        if (visible) {
             postUpdateMapWindow()
         } else {
             closeMap()
@@ -212,10 +256,15 @@ class AmapFloatingCardController(
     }
 
     fun onLayoutReady() {
-        postUpdateMapWindow()
+        if (allowShowOnHome) {
+            postUpdateMapWindow()
+        } else {
+            closeMap()
+        }
     }
 
     fun onPause() {
+        allowShowOnHome = false
         closeMap()
     }
 
@@ -233,6 +282,11 @@ class AmapFloatingCardController(
     }
 
     fun updateMapWindow() {
+        if (!allowShowOnHome) {
+            closeMap()
+            return
+        }
+
         if (!isAmapFloatingInstalled(activity)) {
             closeMap()
             return
