@@ -16,6 +16,22 @@ A4L 车机桌面项目。
 项目约束：未经用户许可，不删除任何素材文件，不改变已确认 UI。
 
 
+## V72.1 home-only amap floating card patch
+
+- 保留测试机推荐参数：x=225 y=50 w=1125 h=515 dpi=200。
+- 高德悬浮窗现在只允许在 MainActivity 首页显示。
+- MainActivity 需要同时满足：Activity 已 resume、窗口有焦点、LauncherCanvasView activeIndex == 0，才会发送 showmap。
+- 进入应用抽屉、我的页、设置页、其它 Activity、外部 App、切后台、失焦、销毁时都会发送 closemap。
+- AmapFloatingCardController 新增 allowShowOnHome 闸门，避免 onResume / onWindowFocusChanged(true) 从非首页误触发 showmap。
+- 修复设置页说明文字中的换行字符串，避免 Java 编译失败。
+
+ADB 调试：
+```bash
+adb shell am broadcast -a com.autonavi.plus.showmap --ei x 225 --ei y 50 --ei w 1125 --ei h 515 --ei dpi 200
+adb shell am broadcast -a com.autonavi.plus.closemap
+```
+
+
 ## v17
 
 - 保持已确认主界面 UI 不变。
@@ -656,3 +672,54 @@ A4L 车机桌面项目。
 - ADB 调试命令：
   - `adb shell am broadcast -a com.autonavi.plus.showmap --ei x 100 --ei y 80 --ei w 900 --ei h 500 --ei dpi 240`
   - `adb shell am broadcast -a com.autonavi.plus.closemap`
+
+
+## V72.1 测试机推荐参数更新
+
+- 已把测试机确认完美的悬浮高德广播参数作为当前推荐默认值：`x=225 y=50 w=1125 h=515 dpi=200`。
+- 因 Launcher 侧设置项是基于 1号卡片测量区域进行微调，所以默认设置换算为：
+  - inset 内缩 dp：`0`
+  - X 偏移 px：`43`
+  - Y 偏移 px：`2`
+  - 宽度缩放 %：`100`
+  - 高度缩放 %：`100`
+  - 强制宽度 px：`1125`
+  - 强制高度 px：`515`
+  - 高德显示 DPI：`200`
+- “1号卡片悬浮高德设置”页面新增“应用测试机推荐参数（225,50,1125,515,DPI200）”。
+- ADB 推荐调试命令：
+
+```bash
+adb shell am broadcast -a com.autonavi.plus.showmap --ei x 225 --ei y 50 --ei w 1125 --ei h 515 --ei dpi 200
+adb shell am broadcast -a com.autonavi.plus.closemap
+```
+
+
+## V72.1 布局调整（卡片 1/2/3）
+- 1号卡片右边界由 x=730 调整到 x=1140，与4号卡片右边界对齐。
+- 2号卡片整体右移到 x=1158~1550，左边界与5号卡片左边界对齐。
+- 3号卡片整体右移到 x=1158~1550，左边界与5号卡片左边界对齐。
+- 同步调整了音乐卡片按钮热区、Live2D 空白点击区与首页问候语位置，避免与新布局重叠。
+
+
+## V72.1 最新悬浮高德推荐参数（卡片1拉长后）
+- 当前测试机确认完美尺寸：`x=225 y=50 w=1125 h=515 dpi=200`。
+- 默认换算设置：inset=0dp，X偏移=3px，Y偏移=2px，宽高缩放=100%，强制宽度=1125px，强制高度=515px，DPI=200。
+- ADB 调试命令：
+```bash
+adb shell am broadcast -a com.autonavi.plus.showmap --ei x 225 --ei y 50 --ei w 1125 --ei h 515 --ei dpi 200
+adb shell am broadcast -a com.autonavi.plus.closemap
+```
+
+
+## V72.1 转向提示修正
+- 修复首页顶部“左转 / 右转”提示中，箭头图标与文字发生重叠的问题。
+- 现在转向提示胶囊内改为：左侧箭头图标 + 右侧文字，视觉上更清晰。
+- 不改动转向逻辑本身，仅调整顶部转向提示的绘制布局。
+
+
+## V72.1 转向提示位置二次修正
+- 左转提示：文字位于图标左侧，文字右边缘与图标左边缘间隔 10px。
+- 右转提示：文字位于图标右侧，图标右边缘与文字左边缘间隔 10px。
+- 左转整组提示框距离屏幕左边约 30px；右转整组提示框距离屏幕右边约 30px。
+- 仅调整顶部转向提示的绘制位置，不修改转向状态逻辑。

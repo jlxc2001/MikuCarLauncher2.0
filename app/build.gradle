@@ -11,8 +11,8 @@ android {
         applicationId 'com.jlxc.mikucarlauncher'
         minSdk 21
         targetSdk 28
-        versionCode 65
-        versionName '0.7.2.1-amap-floating-card-settings'
+        versionCode 71
+        versionName '0.7.2.1-turn-arrow-edge-aligned'
     }
 
     // GitHub 网页上传不会自动删除旧文件。
